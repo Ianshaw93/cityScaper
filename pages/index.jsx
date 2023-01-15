@@ -388,7 +388,7 @@ function Home() {
     
       // return (
         <>
-          <div className='relative z-11'>
+          <div className='absolute z-11'>
 
             {buttons}
           </div>
@@ -411,7 +411,7 @@ function Home() {
               src={fullPlanImage}
               alt="Plan image"
               width={canvasWidth}
-              className= 'z-0'
+              className= 'z-0 pointer-events-none'
               // fill
               // sizes="100vw"
               // style={{
