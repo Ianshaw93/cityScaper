@@ -345,46 +345,54 @@ function Home() {
           }
           console.log("edit function")
         }
-
+        
         function handleToolChange(event) {
           console.log("toolChange:", event.target.value)
           console.log(event.target)
         }
         const canvasWidth = 4*500
-  return (
-    
-      // return (
+        const buttonStyle = "text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
+        const buttons = (          
         <>
           <button 
-            type="button" 
-            className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
-            
-            onClick={lineComplete}>
+          type="button" 
+          className={buttonStyle}        
+          onClick={lineComplete}
+          >
             Complete Line
           </button>
           <button 
-            type="button" 
-            className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
-            onClick={editLine}
+          type="button" 
+          className={buttonStyle}        
+          onClick={editLine}
           >
             Edit Line
           </button>
           <button 
-            type="button" 
-            className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
-            onClick={handleUndo}
+          type="button" 
+          className={buttonStyle}        
+          onClick={handleUndo}
           >
             Undo
           </button>
           <button 
-            type="button" 
-            className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
-            onClick={handleClear}
+          type="button" 
+          className={buttonStyle}        
+          onClick={handleClear}
           >
             Clear
           </button>
+        </>
+        )
+  return (
+    
+      // return (
+        <>
+          <div className='relative z-11'>
 
-          <div className='relative z-0'>
+            {buttons}
+          </div>
+          <div>
             <canvas
               ref={canvasRef}
               width={canvasWidth}
