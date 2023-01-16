@@ -270,34 +270,6 @@ function Home() {
 
 
           }
-          // if (isDrawing) {
-            
-
-          //   // get starting co-ord
-          //   // should be if holds down longer than x distance
-          //   const [x1, y1] = [x, y]
-          //   console.log("x1, y1", x1, y1)
-          //   setRectPoints([x1, y1])
-          // }
-          // else {
-          //   // final co-ord
-          //   if (!rectPoints.length) return
-          //   const [x2, y2] = [x, y]
-
-          //   const [x1, y1] = rectPoints
-          //   setRectPoints(prev => [...prev.slice(0, 2), x2, y2])
-          //   // add to totalLines
-          //   // setTotalLines(prev => [...prev, rectPoints])
-          //   console.log(rectPoints, "rect after x2")
-          //   context.beginPath();
-          //   const widthX = Math.abs(x1 - x2);
-          //   const widthY = Math.abs(y1 - y2);
-          //   console.log("markRect: ",x1, y1, widthX, widthY)
-          //   markRectangle(x1, y1, widthX, widthY);
-          //   setRectPoints([])
-          //   // context.stroke();
-          //   // context.restore();
-          // }
         }
         
         function draw(event) {
@@ -388,7 +360,7 @@ function Home() {
     
       // return (
         <>
-          <div className='absolute z-11'>
+          <div className='absolute z-40'>
 
             {buttons}
           </div>
@@ -397,8 +369,6 @@ function Home() {
               ref={canvasRef}
               width={canvasWidth}
               height={canvasWidth}
-              // width={windowSize.width}
-              // height={windowSize.height}
               className='border border-black rounded-md bg-transparent absolute inset-0 z-10'
               onMouseDown={startDrawing}
               onMouseUp={stopDrawing}
@@ -406,19 +376,15 @@ function Home() {
               // change below on tool selected
               onClick={addPolylinePoint}
               />
-            <Image
-              // loader={myLoader}
-              src={fullPlanImage}
-              alt="Plan image"
-              width={canvasWidth}
-              className= 'z-0 pointer-events-none'
-              // fill
-              // sizes="100vw"
-              // style={{
-                //   objectFit: 'cover',
-                // }}
-                // height={500}
-                />
+            <div className='pointer-events-none'>
+              <Image
+                src={fullPlanImage}
+                alt="Plan image"
+                className= 'absolute z-0 pointer-events-none user-drag-none'
+                onDragStart={(e) => e.preventDefault()}
+                onClick={(e) => e.preventDefault()}
+              />
+              </div>
             </div>
         </>
       );
