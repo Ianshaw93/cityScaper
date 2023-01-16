@@ -8,7 +8,9 @@
   "dependencies": {
     "next": "latest",
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "rough": "^3.0.1",
+    "roughjs": "^4.5.2"
   },
   "devDependencies": {
     "@types/node": "18.11.3",

@@ -1,5 +1,6 @@
 // import type { NextPage } from 'next'
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
+import rough from "roughjs/bundled/rough.cjs.js";
 import Image from 'next/image'
 import planImage from '../public/example_plan.jpeg'
 
@@ -15,7 +16,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
 // TODO: allow markers to be placed - different tool
 // LATER: make responsive
 // LATER: allow adding plan, with scale etc
-function Home() {
+
   
         // TODO: tool object: polyline, rectangle, point
         const tools = {
@@ -24,347 +25,390 @@ function Home() {
           point: "Point"
         }
       // function DrawingApp() {
-        const canvasRef = useRef(null);
-        const contextRef = useRef(null);
+        const generator = rough.generator();
 
-        const [isDrawing, setIsDrawing] = useState(false);
-        const [polylinePoints, setPolylinePoints] = useState([])
-        const [rectPoints, setRectPoints] = useState([]);
-        const [totalLines, setTotalLines] = useState([]);
-        const [currentTool, setCurrentTool] = useState(tools.poly)
-
-        const canvasOffSetX = useRef(null);
-        const canvasOffSetY = useRef(null);
-        const startX = useRef(null);
-        const startY = useRef(null);
-        const endX = useRef(null);
-        const endY = useRef(null);  
+        const createElement = (id, x1, y1, x2, y2, type) => {
+          switch (type) {
+            case "line":
+            case "rectangle":
+              const roughElement =
+                type === "line"
+                  ? generator.line(x1, y1, x2, y2)
+                  : generator.rectangle(x1, y1, x2 - x1, y2 - y1);
+              return { id, x1, y1, x2, y2, type, roughElement };
+            case "pencil":
+              return { id, type, points: [{ x: x1, y: y1 }] };
+            case "text":
+              return { id, type, x1, y1, x2, y2, text: "" };
+            default:
+              throw new Error(`Type not recognised: ${type}`);
+          }
+        };
         
+        const nearPoint = (x, y, x1, y1, name) => {
+          return Math.abs(x - x1) < 5 && Math.abs(y - y1) < 5 ? name : null;
+        };
         
-      // const size = useWindowSize();
-
-      
-      // Hook
-      // function useWindowSize() {
-        // Initialize state with undefined width/height so server and client renders match
-        // Learn more here: https://joshwcomeau.com/react/the-perils-of-rehydration/
-        const [windowSize, setWindowSize] = useState({
-          width: undefined,
-          height: undefined,
-        });
-      // }
-        let dragCounter = 0
-
-        function getCanvasContext() {
-          const canvas = canvasRef.current;
-          const context = canvas.getContext('2d');
-
-          return [canvas, context]
-        }
-        function clearCanvas() {
-          const [canvas, context] = getCanvasContext()
-          //  should be full canvas dimensions
-          // below for clear only??
-          context.clearRect(0, 0, canvas.width, canvas.height);
-          return [canvas, context]
-        } 
-
-        function handleClear() {
-          setPolylinePoints([])
-          setRectPoints([])
-          setTotalLines([])
-          clearCanvas()
-        }
-
-        function handleUndo() {
-          setTotalLines(prevPoints => prevPoints.slice(0, -1))
-        }
-
-
-        useEffect(() => {
-          // console.log("useEffect triggerred")
-          const [canvas, context] = clearCanvas() // should this be cleared each time??
-          
-          // function handleResize() {
-            // Set window width/height to state
-          setWindowSize({
-            width: window.innerWidth,
-            height: window.innerHeight,
-          });
-          // }
-          // perhaps redraw all polylines etc eact time
-          // console.log(totalLines)
-          // change below to loop
-          for (let i = 0; i < totalLines.length; i++ ){
-            // console.log("loop", i)
-            // draw(context, totalLines[i])
-            console.log("totalLines @ useEffect: ", totalLines)
-            let current = totalLines[i]
-            // should be type
-            if (currentTool == tools.rect) {
-              // draw rectangle
-              // TODO: clean up issue with rendering flashing - not issue with polyline
-              markRectangle(...current)
-            }
-            // console.log("current: ", current)
-            if (currentTool == tools.poly) {
-              markPoly(current)
-              // drawPastPoly(context, current)
-            // } else if (rectPoints.length) {
-            //   console.log("currentRct: ", rectPoints)
-            //   // draw rect
-            //   let [x1, y1, x2, y2] = rectPoints
-            //   // let [x2, y2] = rectPoints[1]
-            //   markRectangle(x1, x2, y1, y2)
-
+        const onLine = (x1, y1, x2, y2, x, y, maxDistance = 1) => {
+          const a = { x: x1, y: y1 };
+          const b = { x: x2, y: y2 };
+          const c = { x, y };
+          const offset = distance(a, b) - (distance(a, c) + distance(b, c));
+          return Math.abs(offset) < maxDistance ? "inside" : null;
+        };
+        
+        const positionWithinElement = (x, y, element) => {
+          const { type, x1, x2, y1, y2 } = element;
+          switch (type) {
+            case "line":
+              const on = onLine(x1, y1, x2, y2, x, y);
+              const start = nearPoint(x, y, x1, y1, "start");
+              const end = nearPoint(x, y, x2, y2, "end");
+              return start || end || on;
+            case "rectangle":
+              const topLeft = nearPoint(x, y, x1, y1, "tl");
+              const topRight = nearPoint(x, y, x2, y1, "tr");
+              const bottomLeft = nearPoint(x, y, x1, y2, "bl");
+              const bottomRight = nearPoint(x, y, x2, y2, "br");
+              const inside = x >= x1 && x <= x2 && y >= y1 && y <= y2 ? "inside" : null;
+              return topLeft || topRight || bottomLeft || bottomRight || inside;
+            case "pencil":
+              const betweenAnyPoint = element.points.some((point, index) => {
+                const nextPoint = element.points[index + 1];
+                if (!nextPoint) return false;
+                return onLine(point.x, point.y, nextPoint.x, nextPoint.y, x, y, 5) != null;
+              });
+              return betweenAnyPoint ? "inside" : null;
+            case "text":
+              return x >= x1 && x <= x2 && y >= y1 && y <= y2 ? "inside" : null;
+            default:
+              throw new Error(`Type not recognised: ${type}`);
+          }
+        };
+        
+        const distance = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+        
+        const getElementAtPosition = (x, y, elements) => {
+          return elements
+            .map(element => ({ ...element, position: positionWithinElement(x, y, element) }))
+            .find(element => element.position !== null);
+        };
+        
+        const adjustElementCoordinates = element => {
+          const { type, x1, y1, x2, y2 } = element;
+          if (type === "rectangle") {
+            const minX = Math.min(x1, x2);
+            const maxX = Math.max(x1, x2);
+            const minY = Math.min(y1, y2);
+            const maxY = Math.max(y1, y2);
+            return { x1: minX, y1: minY, x2: maxX, y2: maxY };
+          } else {
+            if (x1 < x2 || (x1 === x2 && y1 < y2)) {
+              return { x1, y1, x2, y2 };
+            } else {
+              return { x1: x2, y1: y2, x2: x1, y2: y1 };
             }
           }
-          // does below work when screen resizes??
-          contextRef.current = context
-          const canvasOffSet = canvas.getBoundingClientRect();
-          canvasOffSetY.current = canvasOffSet.top;
-          canvasOffSetX.current = canvasOffSet.left;
-
-          // totalLines.forEach((line) => draw(context, line))  
-          // needs to run when isDrawing, mouseDown and dragging mouse 
-        }, [totalLines, dragCounter])
-      // },)
-
-        function startDrawingRectangle(event) {
-          // event.preventDefault()
-          // event.stopPropagation()
-
-          startX.current = event.clientX - canvasOffSetX.current;
-          startY.current = event.clientY - canvasOffSetY.current;          
-        }
+        };
         
-        function startDrawing(event) {
-          // const canvas = canvasRef.current;
-          // const context = canvas.getContext('2d');
-          console.log("rect startDrawing", rectPoints)
-          // 
-          // start drawing rectangle or shape
-          if (isDrawing) return
-          if (currentTool == tools.rect) {
-            // TODO: Only update further line if moves more than distance
-            startDrawingRectangle(event)
+        const cursorForPosition = position => {
+          switch (position) {
+            case "tl":
+            case "br":
+            case "start":
+            case "end":
+              return "nwse-resize";
+            case "tr":
+            case "bl":
+              return "nesw-resize";
+            default:
+              return "move";
           }
-          setIsDrawing(true);
-          // function for creating new element
-          // add elements to state
-
-          // context.beginPath();
-          // context.moveTo(event.clientX, event.clientY);
-
-        }
-      
-        function stopDrawing(event) {
-          // action end of rectangle once here
-          // remove if not drawing and mouse moving
-          // drawRectangle(event)
-          // console.log("totalLines", totalLines)
-          // console.log("rect", rectPoints)
-          if (!isDrawing) return
-          if (currentTool == tools.rect) {
-            // should only add points on mouse up
-            // should be width below???
-            setRectPoints([startX.current, startY.current, endX.current, endY.current])
-            setTotalLines(prev => [...prev, [startX.current, startY.current, endX.current, endY.current]])
-            console.log("rect end drawing: ", startX.current, startY.current, endX.current, endY.current)
-          }
-          setIsDrawing(false);
-        }
-      
-        function addPolylinePoint(event) {
-          if (currentTool != tools.poly) {return}
-          setPolylinePoints(prevPoints => [...prevPoints, { x: event.clientX, y: event.clientY }]);
-        }
-
-        function removePolylinePoint(event) {
-          setPolylinePoints(prevPoints => prevPoints.slice(0, -1))
-          drawPolyline(polylinePoints, event)
-          // need to remove line section
-        }
-      
-        function markPoly(points) {
-          console.log("points markPoly: ", points)
-          contextRef.current.moveTo(points[0].x, points[0].y)
-          for (let i = 1; i < points.length; i++) {
-            contextRef.current.lineTo(points[i].x, points[i].y);
-          }
-          contextRef.current.stroke();           
-        }
-        function drawPastPoly(context, points) {
-          if (!context || !points[0]) {return}
-          // const canvas = canvasRef.current;
-          // const context = canvas.getContext('2d');
-          console.log("points: ", points)
-          context.beginPath();
-          context.moveTo(points[0].x, points[0].y);
-          for (let i = 1; i < points.length; i++) {
-            context.lineTo(points[i].x, points[i].y);
-          }
-          context.stroke();                    
-        }
-
-        function drawPolyline(points, event) {
-          const canvas = canvasRef.current;
-          const context = canvas.getContext('2d');
-          context.beginPath();
-          context.moveTo(points[0].x, points[0].y);
-          // if (points.length == 1) {
-          //   // need event for line to mouse location
-          //   // needs to follow mouse location?
-          // }
-          for (let i = 1; i < points.length; i++) {
-            context.lineTo(points[i].x, points[i].y);
-          }
-          // TODO: add to state variable; remove each time mouse moves; action when isDrawing
-          context.lineTo(event.clientX, event.clientY); // line needs to be removed as mouse moves, stay after click
-          context.stroke();
-        }
-
-        function markRectangle(x1, y1, x2, y2) {
-          // TODO: unclear why position or rect changes??
-          // const [canvas, context] = getCanvasContext()
-          const widthX = (x2 - x1);
-          const widthY = (y2 - y1);
-
-          // const widthX = (x1 - x2);
-          // const widthY = (y1 - y2);
-          // contextRef.current.rect(x1, y1, widthX, widthY)
-          // contextRef.current.stroke();
-          contextRef.current.strokeRect(x1, y1, widthX, widthY);
-          contextRef.current.restore();          
-        }
-
+        };
         
-
-        function drawRectangle(e) {
-          if (!isDrawing){return}
-          // action only if rectangle tool chosen
-          // const [canvas, context] = getCanvasContext()
-          // const rect = canvas.getBoundingClientRect()
-          // const x = e.clientX - rect.left
-          // const y = e.clientY - rect.top 
-          // console.log("x, y: ", x, y)
-          
-          // e.preventDefault();
-          // e.stopPropagation();
-  
-          const newMouseX = e.clientX - canvasOffSetX.current;
-          const newMouseY = e.clientY - canvasOffSetY.current;
-          endX.current = newMouseX; // can this wait until the end of the shape?
-          endY.current = newMouseY; // why does this update?
-  
-          const rectWidth = newMouseX - startX.current;
-          const rectHeight = newMouseY - startY.current;
-
-          if (Math.abs(rectHeight) && Math.abs(rectWidth) > 10) {
-            
-                    // contextRef.current.clearRect(startX.current, startY.current, rectWidth, rectHeight);
-                    contextRef.current.clearRect(0, 0, windowSize.width, windowSize.height);
-
-            
-                    contextRef.current.strokeRect(startX.current, startY.current, rectWidth, rectHeight);          
-
-
+        const resizedCoordinates = (clientX, clientY, position, coordinates) => {
+          const { x1, y1, x2, y2 } = coordinates;
+          switch (position) {
+            case "tl":
+            case "start":
+              return { x1: clientX, y1: clientY, x2, y2 };
+            case "tr":
+              return { x1, y1: clientY, x2: clientX, y2 };
+            case "bl":
+              return { x1: clientX, y1, x2, y2: clientY };
+            case "br":
+            case "end":
+              return { x1, y1, x2: clientX, y2: clientY };
+            default:
+              return null; //should not really get here...
           }
-        }
+        };
         
-        function draw(event) {
-          // TODO: add other tools than polyline
-          // if mouse held down -> rectangle not polyline
-          console.log("isDrawing in draw func:", isDrawing)
-          if (!isDrawing) return
-          dragCounter += 1
-          if (currentTool == tools.poly) {
-
-            if (polylinePoints.length > 0) {
-              drawPolyline(polylinePoints, event);
-              
+        const useHistory = initialState => {
+          const [index, setIndex] = useState(0);
+          const [history, setHistory] = useState([initialState]);
+        
+          const setState = (action, overwrite = false) => {
+            const newState = typeof action === "function" ? action(history[index]) : action;
+            if (overwrite) {
+              const historyCopy = [...history];
+              historyCopy[index] = newState;
+              setHistory(historyCopy);
+            } else {
+              const updatedState = [...history].slice(0, index + 1);
+              setHistory([...updatedState, newState]);
+              setIndex(prevState => prevState + 1);
             }
-          }
-          else if (currentTool == tools.rect) {
-            // TODO: start drawing rectangle
-            drawRectangle(event)
-
-            
-          // } else{
-          //   drawRectangle(event)
-          // }
-        }}
-
-        function lineComplete() {
-          // how to add all lines and points to array?
-          // TODO: add element with info on type; and points array
-          setTotalLines(prev => [...prev, polylinePoints])
-          setPolylinePoints([])
-          setRectPoints([])
-          console.log("line cleared")
-        }
-
-        function editLine(event) {
-          // get last polyline drawn/ use current 
-          // move last point to mouse click
-          if (polylinePoints.length > 0) {
-            // use current polyline
-            removePolylinePoint(event)
-          } 
-          else {
-            // access last polyline
-            // lateer access polyline selected
-          }
-          console.log("edit function")
-        }
+          };
         
-        function handleToolChange(event) {
-          console.log("toolChange:", event.target.value)
-          console.log(event.target)
-        }
-        const canvasWidth = 4*500
+          const undo = () => index > 0 && setIndex(prevState => prevState - 1);
+          const redo = () => index < history.length - 1 && setIndex(prevState => prevState + 1);
+        
+          return [history[index], setState, undo, redo];
+        };
+        
+        const getSvgPathFromStroke = stroke => {
+          if (!stroke.length) return "";
+        
+          const d = stroke.reduce(
+            (acc, [x0, y0], i, arr) => {
+              const [x1, y1] = arr[(i + 1) % arr.length];
+              acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+              return acc;
+            },
+            ["M", ...stroke[0], "Q"]
+          );
+        
+          d.push("Z");
+          return d.join(" ");
+        };
+        
+        const drawElement = (roughCanvas, context, element) => {
+          switch (element.type) {
+            case "line":
+            case "rectangle":
+              roughCanvas.draw(element.roughElement);
+              break;
+            default:
+              throw new Error(`Type not recognised: ${element.type}`);
+          }
+        };
+        
+        const adjustmentRequired = type => ["line", "rectangle"].includes(type);
+        
+        function Home() {
+          const [elements, setElements, undo, redo] = useHistory([]);
+          const [action, setAction] = useState("none");
+          const [tool, setTool] = useState("line");
+          const [selectedElement, setSelectedElement] = useState(null);
+        
+          useLayoutEffect(() => {
+            const canvas = document.getElementById("canvas");
+            const context = canvas.getContext("2d");
+            context.clearRect(0, 0, canvas.width, canvas.height);
+        
+            const roughCanvas = rough.canvas(canvas);
+        
+            elements.forEach(element => {
+              // if (action === "writing" && selectedElement.id === element.id) return;
+              drawElement(roughCanvas, context, element);
+            });
+          }, [elements, action, selectedElement]);
+        
+          useEffect(() => {
+            const undoRedoFunction = event => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "z") {
+                if (event.shiftKey) {
+                  redo();
+                } else {
+                  undo();
+                }
+              }
+            };
+        
+            document.addEventListener("keydown", undoRedoFunction);
+            return () => {
+              document.removeEventListener("keydown", undoRedoFunction);
+            };
+          }, [undo, redo]);
+        
+        
+          const updateElement = (id, x1, y1, x2, y2, type, options) => {
+            const elementsCopy = [...elements];
+        
+            switch (type) {
+              case "line":
+              case "rectangle":
+                elementsCopy[id] = createElement(id, x1, y1, x2, y2, type);
+                break;
+              // below may be transferable to polyline? 
+              case "pencil":
+                elementsCopy[id].points = [...elementsCopy[id].points, { x: x2, y: y2 }];
+                break;
+              default:
+                throw new Error(`Type not recognised: ${type}`);
+            }
+        
+            setElements(elementsCopy, true);
+          };
+        
+          const handleMouseDown = event => {
+            const { clientX, clientY } = event;
+            if (tool === "selection") {
+              const element = getElementAtPosition(clientX, clientY, elements);
+              if (element) {
+                if (element.type === "pencil") {
+                  const xOffsets = element.points.map(point => clientX - point.x);
+                  const yOffsets = element.points.map(point => clientY - point.y);
+                  setSelectedElement({ ...element, xOffsets, yOffsets });
+                } else {
+                  const offsetX = clientX - element.x1;
+                  const offsetY = clientY - element.y1;
+                  setSelectedElement({ ...element, offsetX, offsetY });
+                }
+                // what is the point in this line??
+                setElements(prevState => prevState);
+        
+                if (element.position === "inside") {
+                  setAction("moving");
+                } else {
+                  setAction("resizing");
+                }
+              }
+            } else {
+              const id = elements.length;
+              const element = createElement(id, clientX, clientY, clientX, clientY, tool);
+              setElements(prevState => [...prevState, element]);
+              setSelectedElement(element);
+        
+              setAction(tool === "text" ? "writing" : "drawing");
+            }
+          };
+        
+          const handleMouseMove = event => {
+            const { clientX, clientY } = event;
+        
+            if (tool === "selection") {
+              const element = getElementAtPosition(clientX, clientY, elements);
+              event.target.style.cursor = element ? cursorForPosition(element.position) : "default";
+            }
+        
+            if (action === "drawing") {
+              const index = elements.length - 1;
+              const { x1, y1 } = elements[index];
+              updateElement(index, x1, y1, clientX, clientY, tool);
+            } else if (action === "moving") {
+              if (selectedElement.type === "pencil") {
+                const newPoints = selectedElement.points.map((_, index) => ({
+                  x: clientX - selectedElement.xOffsets[index],
+                  y: clientY - selectedElement.yOffsets[index],
+                }));
+                const elementsCopy = [...elements];
+                elementsCopy[selectedElement.id] = {
+                  ...elementsCopy[selectedElement.id],
+                  points: newPoints,
+                };
+                setElements(elementsCopy, true);
+              } else {
+                const { id, x1, x2, y1, y2, type, offsetX, offsetY } = selectedElement;
+                const width = x2 - x1;
+                const height = y2 - y1;
+                const newX1 = clientX - offsetX;
+                const newY1 = clientY - offsetY;
+                const options = type === "text" ? { text: selectedElement.text } : {};
+                updateElement(id, newX1, newY1, newX1 + width, newY1 + height, type, options);
+              }
+            } else if (action === "resizing") {
+              const { id, type, position, ...coordinates } = selectedElement;
+              const { x1, y1, x2, y2 } = resizedCoordinates(clientX, clientY, position, coordinates);
+              updateElement(id, x1, y1, x2, y2, type);
+            }
+          };
+        
+          const handleMouseUp = event => {
+            const { clientX, clientY } = event;
+            if (selectedElement) {
+              if (
+                selectedElement.type === "text" &&
+                clientX - selectedElement.offsetX === selectedElement.x1 &&
+                clientY - selectedElement.offsetY === selectedElement.y1
+              ) {
+                setAction("writing");
+                return;
+              }
+        
+              const index = selectedElement.id;
+              const { id, type } = elements[index];
+              if ((action === "drawing" || action === "resizing") && adjustmentRequired(type)) {
+                const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
+                updateElement(id, x1, y1, x2, y2, type);
+              }
+            }
+        
+            if (action === "writing") return;
+        
+            setAction("none");
+            setSelectedElement(null);
+          };
+        
+          const handleBlur = event => {
+            const { id, x1, y1, type } = selectedElement;
+            setAction("none");
+            setSelectedElement(null);
+            updateElement(id, x1, y1, null, null, type, { text: event.target.value });
+          };
+                // const canvasWidth = 4*500
+        const buttonContainerStyle = ""
         const buttonStyle = "text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
-        const buttons = (          
+        const topButtons = (          
         <>
-          <div style={{ position: "fixed" }}>
+          {/* <div style={{ position: "fixed" }}> */}
               <input
                 type="radio"
                 id="selection"
-                checked={currentTool === "selection"}
-                onChange={() => setCurrentTool("selection")}
+                checked={tool === "selection"}
+                onChange={() => setTool("selection")}
               />
               <label htmlFor="selection">Selection</label>
-              <input type="radio" id="line" checked={currentTool === "line"} onChange={() => setCurrentTool("line")} />
+              <input type="radio" id="line" checked={tool === tools.poly} onChange={() => setTool(tools.poly)} />
               <label htmlFor="line">Line</label>
               <input
                 type="radio"
                 id="rectangle"
-                checked={currentTool === tools.rect}
-                onChange={() => setCurrentTool(tools.rect)}
+                checked={tool === tools.rect}
+                onChange={() => setTool(tools.rect)}
               />
               <label htmlFor="rectangle">Rectangle</label>
-          </div>
+          {/* </div> */}
         </>
+        )
+        const bottomButtons = (
+          <>
+            <div style={{ position: "fixed", bottom: 0, padding: 10 }}>
+              <button className={buttonStyle} onClick={undo}>Undo</button>
+              <button className={buttonStyle} onClick={redo}>Redo</button>
+            </div>            
+          </>
         )
   return (
     
       // return (
         <>
-          <div className='absolute z-40'>
+          <div className={buttonContainerStyle}>
 
-            {buttons}
+            {topButtons}
           </div>
           <div>
             <canvas
-              ref={canvasRef}
-              width={canvasWidth}
-              height={canvasWidth}
+              id='canvas'
+              // width={canvasWidth}
+              // height={canvasWidth}
               className='border border-black rounded-md bg-transparent absolute inset-0 z-10'
-              onMouseDown={startDrawing}
-              onMouseUp={stopDrawing}
-              onMouseMove={draw}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
               // change below on tool selected
-              onClick={addPolylinePoint}
+              // onClick={addPolylinePoint}
               />
             <div className='pointer-events-none'>
               <Image
