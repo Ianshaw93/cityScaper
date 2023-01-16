@@ -326,34 +326,24 @@ function Home() {
         const buttonStyle = "text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
         const buttons = (          
         <>
-          <button 
-          type="button" 
-          className={buttonStyle}        
-          onClick={lineComplete}
-          >
-            Complete Line
-          </button>
-          <button 
-          type="button" 
-          className={buttonStyle}        
-          onClick={editLine}
-          >
-            Edit Line
-          </button>
-          <button 
-          type="button" 
-          className={buttonStyle}        
-          onClick={handleUndo}
-          >
-            Undo
-          </button>
-          <button 
-          type="button" 
-          className={buttonStyle}        
-          onClick={handleClear}
-          >
-            Clear
-          </button>
+          <div style={{ position: "fixed" }}>
+              <input
+                type="radio"
+                id="selection"
+                checked={currentTool === "selection"}
+                onChange={() => setCurrentTool("selection")}
+              />
+              <label htmlFor="selection">Selection</label>
+              <input type="radio" id="line" checked={currentTool === "line"} onChange={() => setCurrentTool("line")} />
+              <label htmlFor="line">Line</label>
+              <input
+                type="radio"
+                id="rectangle"
+                checked={currentTool === tools.rect}
+                onChange={() => setCurrentTool(tools.rect)}
+              />
+              <label htmlFor="rectangle">Rectangle</label>
+          </div>
         </>
         )
   return (
