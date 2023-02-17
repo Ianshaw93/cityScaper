@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import rough from "roughjs/bundled/rough.cjs.js";
 import Image from 'next/image'
 import planImage from '../public/example_plan.jpeg'
+import getStroke from "perfect-freehand";
 
 let uri = '../public/plans/SSW-DLG-RS1-06-DR-A-6804%20-%20SIXTH%20FLOOR%20FIRE%20STRATEGY.jpg'
 // let encoded = encodeURIComponent(uri);
@@ -20,9 +21,9 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
   
         // TODO: tool object: polyline, rectangle, point
         const tools = {
-          poly: "Polyline",
-          rect: "Rectangle",
-          point: "Point"
+          poly: "line",
+          rect: "rectangle",
+          point: "point"
         }
       // function DrawingApp() {
         const generator = rough.generator();
@@ -37,6 +38,8 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
                   : generator.rectangle(x1, y1, x2 - x1, y2 - y1);
               return { id, x1, y1, x2, y2, type, roughElement };
             case "pencil":
+              console.log("createElement pencil", x1, y1, x2, y2)
+              generator.line(x1, y1, x2, y2)
               return { id, type, points: [{ x: x1, y: y1 }] };
             case "text":
               return { id, type, x1, y1, x2, y2, text: "" };
@@ -189,6 +192,14 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
             case "rectangle":
               roughCanvas.draw(element.roughElement);
               break;
+            case "pencil":
+              // add point to total points
+              // only on click down
+              console.log("pencil", element)
+              // roughCanvas.draw(element.roughElement)
+              const stroke = getSvgPathFromStroke(getStroke(element.points));
+              context.fill(new Path2D(stroke));
+              break;
             default:
               throw new Error(`Type not recognised: ${element.type}`);
           }
@@ -211,6 +222,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
         
             elements.forEach(element => {
               // if (action === "writing" && selectedElement.id === element.id) return;
+              console.log("uselayout element: ", element)
               drawElement(roughCanvas, context, element);
             });
           }, [elements, action, selectedElement]);
@@ -243,7 +255,11 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
                 break;
               // below may be transferable to polyline? 
               case "pencil":
+                // should only be actioned on 
+                // elementsCopy[id] = createElement(id, x1, y1, x2, y2, type);
                 elementsCopy[id].points = [...elementsCopy[id].points, { x: x2, y: y2 }];
+
+
                 break;
               default:
                 throw new Error(`Type not recognised: ${type}`);
@@ -252,21 +268,33 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
             setElements(elementsCopy, true);
           };
         
+          let polycounter = 0
           const handleMouseDown = event => {
             const { clientX, clientY } = event;
-            if (tool === "selection") {
+            // if (tool === "pencil") {
+            //   // TODO: update polyline below
+            //   // should only update points on mousedown events
+            //   // should add further point to pencil
+            // }
+            if (tool === "selection") { // selection to move -> therefore remove below function
               const element = getElementAtPosition(clientX, clientY, elements);
               if (element) {
-                if (element.type === "pencil") {
-                  const xOffsets = element.points.map(point => clientX - point.x);
-                  const yOffsets = element.points.map(point => clientY - point.y);
-                  setSelectedElement({ ...element, xOffsets, yOffsets });
-                } else {
-                  const offsetX = clientX - element.x1;
-                  const offsetY = clientY - element.y1;
-                  setSelectedElement({ ...element, offsetX, offsetY });
-                }
-                // what is the point in this line??
+
+                    if (element.type === "pencil") {
+                      if (polycounter == 0){
+                        const xOffsets = element.points.map(point => clientX - point.x);
+                        const yOffsets = element.points.map(point => clientY - point.y);
+                        setSelectedElement({ ...element, xOffsets, yOffsets })
+                        polycounter = 1
+                      } else { 
+                        return
+                      }
+                    } else {
+                      const offsetX = clientX - element.x1;
+                      const offsetY = clientY - element.y1;
+                      setSelectedElement({ ...element, offsetX, offsetY });
+                    }
+
                 setElements(prevState => prevState);
         
                 if (element.position === "inside") {
@@ -297,8 +325,14 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
               const index = elements.length - 1;
               const { x1, y1 } = elements[index];
               updateElement(index, x1, y1, clientX, clientY, tool);
-            } else if (action === "moving") {
+
+              // // extra part here
+              // if (tool == 'pencil' && polycounter != 0){
+              //   updateElement(index, x1, y1, clientX, clientY, tool);
+              //   }            
+              } else if (action === "moving") { // moving is relocation shapes
               if (selectedElement.type === "pencil") {
+                // should only update points on mousedown events
                 const newPoints = selectedElement.points.map((_, index) => ({
                   x: clientX - selectedElement.xOffsets[index],
                   y: clientY - selectedElement.yOffsets[index],
@@ -327,6 +361,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
         
           const handleMouseUp = event => {
             const { clientX, clientY } = event;
+            polycounter = 0
             if (selectedElement) {
               if (
                 selectedElement.type === "text" &&
@@ -358,7 +393,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
             updateElement(id, x1, y1, null, null, type, { text: event.target.value });
           };
                 // const canvasWidth = 4*500
-        const buttonContainerStyle = ""
+        const buttonContainerStyle = "absolute z-40"
         const buttonStyle = "text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
         const topButtons = (          
         <>
@@ -379,6 +414,13 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
                 onChange={() => setTool(tools.rect)}
               />
               <label htmlFor="rectangle">Rectangle</label>
+              <input
+                type="radio"
+                id="pencil"
+                checked={tool === "pencil"}
+                onChange={() => setTool("pencil")}
+              />
+              <label htmlFor="pencil">Pencil</label>
           {/* </div> */}
         </>
         )
@@ -401,9 +443,11 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
           <div>
             <canvas
               id='canvas'
+              width={fullPlanImage.width}
+              height={fullPlanImage.height}
               // width={canvasWidth}
               // height={canvasWidth}
-              className='border border-black rounded-md bg-transparent absolute inset-0 z-10'
+              className='border border-black rounded-md bg-transparent inset-0 absolute z-10'
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
               onMouseMove={handleMouseMove}
@@ -414,7 +458,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
               <Image
                 src={fullPlanImage}
                 alt="Plan image"
-                className= 'absolute z-0 pointer-events-none user-drag-none'
+                className= 'inset-0 absolute z-0 pointer-events-none user-drag-none'
                 onDragStart={(e) => e.preventDefault()}
                 onClick={(e) => e.preventDefault()}
               />
