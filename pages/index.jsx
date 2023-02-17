@@ -8,7 +8,9 @@ import getStroke from "perfect-freehand";
 let uri = '../public/plans/SSW-DLG-RS1-06-DR-A-6804%20-%20SIXTH%20FLOOR%20FIRE%20STRATEGY.jpg'
 // let encoded = encodeURIComponent(uri);
 // import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804\s-\sSIXTH\sFLOOR\sFIRE\sSTRATEGY.pdf'
-import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFIRESTRATEGY.jpg'
+// import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFIRESTRATEGY.jpg'
+import fullPlanImage from '../public/plans/TD02H.jpg'
+
 // console.log(encoded)
 
 // should lines be saved in local storage -> kept if refreshed?
@@ -20,6 +22,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
 
   
         // TODO: tool object: polyline, rectangle, point
+        // TODO: allow for smaller selection etc -> use vs full screen size
         const tools = {
           poly: "line",
           rect: "rectangle",
@@ -27,6 +30,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
         }
       // function DrawingApp() {
         const generator = rough.generator();
+        const lineConfig = { bowing: 0, roughness: 0, stroke: 'blue'}
 
         const createElement = (id, x1, y1, x2, y2, type) => {
           switch (type) {
@@ -35,7 +39,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
               const roughElement =
                 type === "line"
                   ? generator.line(x1, y1, x2, y2)
-                  : generator.rectangle(x1, y1, x2 - x1, y2 - y1);
+                  : generator.rectangle(x1, y1, x2 - x1, y2 - y1, lineConfig);
               return { id, x1, y1, x2, y2, type, roughElement };
             case "pencil":
               console.log("createElement pencil", x1, y1, x2, y2)
@@ -464,6 +468,7 @@ import fullPlanImage from '../public/plans/SSW-DLG-RS1-06-DR-A-6804-SIXTHFLOORFI
               />
               </div>
             </div>
+            {/* {bottomButtons} */}
         </>
       );
     }
