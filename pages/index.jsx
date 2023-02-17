@@ -4,6 +4,7 @@ import rough from "roughjs/bundled/rough.cjs.js";
 import Image from 'next/image'
 import planImage from '../public/example_plan.jpeg'
 import getStroke from "perfect-freehand";
+import useWindowSize from "../hooks/UseWindowsize"
 
 let uri = '../public/plans/SSW-DLG-RS1-06-DR-A-6804%20-%20SIXTH%20FLOOR%20FIRE%20STRATEGY.jpg'
 // let encoded = encodeURIComponent(uri);
@@ -216,6 +217,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           const [action, setAction] = useState("none");
           const [tool, setTool] = useState("line");
           const [selectedElement, setSelectedElement] = useState(null);
+
+          const windowSize = useWindowSize()
         
           useLayoutEffect(() => {
             const canvas = document.getElementById("canvas");
@@ -449,6 +452,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               id='canvas'
               width={fullPlanImage.width}
               height={fullPlanImage.height}
+              // width={windowSize.width}
+              // height={windowSize.height}
               // width={canvasWidth}
               // height={canvasWidth}
               className='border border-black rounded-md bg-transparent inset-0 absolute z-10'
@@ -461,6 +466,10 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             <div className='pointer-events-none'>
               <Image
                 src={fullPlanImage}
+                layout="fill"
+                objectFit='contain'
+                // width={windowSize.width}
+                // height={windowSize.height}
                 alt="Plan image"
                 className= 'inset-0 absolute z-0 pointer-events-none user-drag-none'
                 onDragStart={(e) => e.preventDefault()}
