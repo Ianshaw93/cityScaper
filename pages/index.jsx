@@ -450,10 +450,10 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           <div>
             <canvas
               id='canvas'
-              width={fullPlanImage.width}
-              height={fullPlanImage.height}
-              // width={windowSize.width}
-              // height={windowSize.height}
+              // width={fullPlanImage.width}
+              // height={fullPlanImage.height}
+              width={windowSize.width}
+              height={windowSize.height}
               // width={canvasWidth}
               // height={canvasWidth}
               className='border border-black rounded-md bg-transparent inset-0 absolute z-10'
