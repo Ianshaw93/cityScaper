@@ -24,6 +24,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
   
         // TODO: tool object: polyline, rectangle, point
         // TODO: allow for smaller selection etc -> use vs full screen size
+        // how to handle polyline? -> use points
         const tools = {
           poly: "line",
           rect: "rectangle",
@@ -42,8 +43,14 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
                   ? generator.line(x1, y1, x2, y2)
                   : generator.rectangle(x1, y1, x2 - x1, y2 - y1, lineConfig);
               return { id, x1, y1, x2, y2, type, roughElement };
+            {/* 
+            change pencil to polyline
+          */}
             case "pencil":
               console.log("createElement pencil", x1, y1, x2, y2)
+                          {/* 
+            add new point to points array, and draw line from last point to new point
+          */}
               generator.line(x1, y1, x2, y2)
               return { id, type, points: [{ x: x1, y: y1 }] };
             case "text":
@@ -51,6 +58,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             default:
               throw new Error(`Type not recognised: ${type}`);
           }
+          
         };
         
         const nearPoint = (x, y, x1, y1, name) => {
@@ -194,16 +202,37 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
         const drawElement = (roughCanvas, context, element) => {
           switch (element.type) {
             case "line":
+            case "polyline":
+              for (let i = 0; i < element.points.length - 1; i++) {
+                const point1 = element.points[i];
+                const point2 = element.points[i + 1];
+                roughCanvas.line(point1.x, point1.y, point2.x, point2.y);
+              }              
             case "rectangle":
               roughCanvas.draw(element.roughElement);
               break;
             case "pencil":
               // add point to total points
               // only on click down
-              console.log("pencil", element)
-              // roughCanvas.draw(element.roughElement)
-              const stroke = getSvgPathFromStroke(getStroke(element.points));
-              context.fill(new Path2D(stroke));
+              console.log("pencil", element.points)
+              // console.log("Stroke: ", getStroke(element.points))
+              // // roughCanvas.draw(element.roughElement)
+
+              // roughCanvas.draw(roughCanvas.linearPath(element.points))
+              // cut stroke to first and last co-ords
+              // are points added each time??
+              {/* 
+                change pencil to be a polyline, draw line between points
+                loop through points and draw line between each point
+              */}
+
+              for (let i = 0; i < element.points.length - 1; i++) {
+                const point1 = element.points[i];
+                const point2 = element.points[i + 1];
+                roughCanvas.line(point1.x, point1.y, point2.x, point2.y);
+              }
+              // const stroke = getSvgPathFromStroke(getStroke(element.points));
+              // context.fill(new Path2D(stroke));
               break;
             default:
               throw new Error(`Type not recognised: ${element.type}`);
@@ -275,7 +304,6 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             setElements(elementsCopy, true);
           };
         
-          let polycounter = 0
           const handleMouseDown = event => {
             const { clientX, clientY } = event;
             // if (tool === "pencil") {
@@ -288,14 +316,11 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               if (element) {
 
                     if (element.type === "pencil") {
-                      if (polycounter == 0){
                         const xOffsets = element.points.map(point => clientX - point.x);
                         const yOffsets = element.points.map(point => clientY - point.y);
                         setSelectedElement({ ...element, xOffsets, yOffsets })
-                        polycounter = 1
-                      } else { 
-                        return
-                      }
+
+
                     } else {
                       const offsetX = clientX - element.x1;
                       const offsetY = clientY - element.y1;
@@ -311,6 +336,12 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
                 }
               }
             } else {
+              {/* add points to pencil on mousedown */}
+              if (tool === "pencil" & action === "drawing") {
+                const index = elements.length - 1;
+                const { x1, y1 } = elements[index];
+                updateElement(index, x1, y1, clientX, clientY, tool);
+              } else {
               const id = elements.length;
               const element = createElement(id, clientX, clientY, clientX, clientY, tool);
               setElements(prevState => [...prevState, element]);
@@ -318,7 +349,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
         
               setAction(tool === "text" ? "writing" : "drawing");
             }
-          };
+          }};
         
           const handleMouseMove = event => {
             const { clientX, clientY } = event;
@@ -329,9 +360,11 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             }
         
             if (action === "drawing") {
+              if (tool === "pencil") { }else {
               const index = elements.length - 1;
               const { x1, y1 } = elements[index];
               updateElement(index, x1, y1, clientX, clientY, tool);
+            }
 
               // // extra part here
               // if (tool == 'pencil' && polycounter != 0){
@@ -368,7 +401,6 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
         
           const handleMouseUp = event => {
             const { clientX, clientY } = event;
-            polycounter = 0
             if (selectedElement) {
               if (
                 selectedElement.type === "text" &&
@@ -388,7 +420,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             }
         
             if (action === "writing") return;
-        
+            if (tool === "pencil" & action === "drawing") return;
+            // need a button to end polyline/pencil
             setAction("none");
             setSelectedElement(null);
           };
