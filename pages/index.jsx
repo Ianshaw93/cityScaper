@@ -34,6 +34,12 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
         const generator = rough.generator();
         const lineConfig = { bowing: 0, roughness: 0, stroke: 'blue'}
 
+        // TODO: how to allow for polyline?
+        // add multi points to state?
+        const createPolyElement = (id, points, type) => { 
+          const roughElement = generator.polygon(points, lineConfig)
+          return { id, type, points, roughElement }
+        }
         const createElement = (id, x1, y1, x2, y2, type) => {
           switch (type) {
             case "line":
@@ -51,8 +57,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
                           {/* 
             add new point to points array, and draw line from last point to new point
           */}
-              generator.line(x1, y1, x2, y2)
-              return { id, type, points: [{ x: x1, y: y1 }] };
+              const roughEl = generator.line(x1, y1, x2, y2)
+              return { id, type, points: [{ x: x1, y: y1 }], roughElement: roughEl };
             case "text":
               return { id, type, x1, y1, x2, y2, text: "" };
             default:
@@ -183,38 +189,26 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           return [history[index], setState, undo, redo];
         };
         
-        const getSvgPathFromStroke = stroke => {
-          if (!stroke.length) return "";
-        
-          const d = stroke.reduce(
-            (acc, [x0, y0], i, arr) => {
-              const [x1, y1] = arr[(i + 1) % arr.length];
-              acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
-              return acc;
-            },
-            ["M", ...stroke[0], "Q"]
-          );
-        
-          d.push("Z");
-          return d.join(" ");
-        };
         
         const drawElement = (roughCanvas, context, element) => {
           switch (element.type) {
             case "line":
-            case "polyline":
-              for (let i = 0; i < element.points.length - 1; i++) {
-                const point1 = element.points[i];
-                const point2 = element.points[i + 1];
-                roughCanvas.line(point1.x, point1.y, point2.x, point2.y);
-              }              
+              // TODO: find where made roughElement
+              console.log("line", element.roughElement  )
+
+            // case "polyline":
+            //   for (let i = 0; i < element.points.length - 1; i++) {
+            //     const point1 = element.points[i];
+            //     const point2 = element.points[i + 1];
+            //     roughCanvas.line(point1.x, point1.y, point2.x, point2.y);
+            //   }              
             case "rectangle":
               roughCanvas.draw(element.roughElement);
               break;
             case "pencil":
               // add point to total points
               // only on click down
-              console.log("pencil", element.points)
+              console.log("pencil", element.roughElement  )
               // console.log("Stroke: ", getStroke(element.points))
               // // roughCanvas.draw(element.roughElement)
 
@@ -224,12 +218,14 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               {/* 
                 change pencil to be a polyline, draw line between points
                 loop through points and draw line between each point
+                how to persist the line?
               */}
-
+              // roughCanvas.linearPath(element.points)
+              // should attach to state or to a roughCanvas element
               for (let i = 0; i < element.points.length - 1; i++) {
                 const point1 = element.points[i];
                 const point2 = element.points[i + 1];
-                roughCanvas.line(point1.x, point1.y, point2.x, point2.y);
+                roughCanvas.line(point1.x, point1.y, point2.x, point2.y, lineConfig);
               }
               // const stroke = getSvgPathFromStroke(getStroke(element.points));
               // context.fill(new Path2D(stroke));
@@ -245,6 +241,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           const [elements, setElements, undo, redo] = useHistory([]);
           const [action, setAction] = useState("none");
           const [tool, setTool] = useState("line");
+          const [polyPoints, setPolyPoints] = useState([]);
+          const [polygons, setPolygons] = useState([]);
           const [selectedElement, setSelectedElement] = useState(null);
 
           const windowSize = useWindowSize()
@@ -255,17 +253,42 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             context.clearRect(0, 0, canvas.width, canvas.height);
         
             const roughCanvas = rough.canvas(canvas);
-        
+            
+            // TODO: allow group of points for polyline
             elements.forEach(element => {
               // if (action === "writing" && selectedElement.id === element.id) return;
               console.log("uselayout element: ", element)
               drawElement(roughCanvas, context, element);
             });
-          }, [elements, action, selectedElement]);
+            // loop through polyPoints and draw line between each point
+            // TODO: bring polyline into useHistory
+            // can sync polygon to elements when complete
+            for (let i = 0; i < polyPoints.length - 1; i++) {
+              const point1 = polyPoints[i];
+              const point2 = polyPoints[i + 1];
+              roughCanvas.line(point1.x, point1.y, point2.x, point2.y, lineConfig);
+            }
+            polygons.forEach(polygon => {
+              for (let i = 0; i < polygon.length - 1; i++) {
+                const point1 = polygon[i];
+                const point2 = polygon[i + 1];
+                roughCanvas.line(point1.x, point1.y, point2.x, point2.y, lineConfig);
+              }
+            })
+          }, [elements, action, selectedElement, polyPoints]);
         
           useEffect(() => {
             const undoRedoFunction = event => {
+              if(event.key === "Enter") {
+                // add polyline to elements
+                setPolygons([...polygons, polyPoints])
+                console.log("enter")
+                setAction("none")
+                setPolyPoints([])
+                // should not continue from last point
+              }
               if ((event.metaKey || event.ctrlKey) && event.key === "z") {
+                setAction("none")
                 if (event.shiftKey) {
                   redo();
                 } else {
@@ -280,7 +303,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             };
           }, [undo, redo]);
         
-        
+        // TODO: update below to have points sent in
           const updateElement = (id, x1, y1, x2, y2, type, options) => {
             const elementsCopy = [...elements];
         
@@ -293,7 +316,16 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               case "pencil":
                 // should only be actioned on 
                 // elementsCopy[id] = createElement(id, x1, y1, x2, y2, type);
+                // // TODO: need the pencil points to persist
+                // if (elementsCopy[id].points.length > 0) {
+                //   elementsCopy[id].points = [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+                // }
                 elementsCopy[id].points = [...elementsCopy[id].points, { x: x2, y: y2 }];
+                console.log("elementsCopy[id].points: ", elementsCopy[id].points)
+                // create element with above points
+                elementsCopy[id] = createPolyElement(id, elementsCopy[id].points, type);
+                setPolyPoints(elementsCopy[id].points)
+
 
 
                 break;
@@ -339,6 +371,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               {/* add points to pencil on mousedown */}
               if (tool === "pencil" & action === "drawing") {
                 const index = elements.length - 1;
+                // need to change element below
                 const { x1, y1 } = elements[index];
                 updateElement(index, x1, y1, clientX, clientY, tool);
               } else {
@@ -363,6 +396,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               if (tool === "pencil") { }else {
               const index = elements.length - 1;
               const { x1, y1 } = elements[index];
+              // TODO: have temp line from second last point to clientX, clientY
+              // TODO: update pencil element on mousedown
               updateElement(index, x1, y1, clientX, clientY, tool);
             }
 
