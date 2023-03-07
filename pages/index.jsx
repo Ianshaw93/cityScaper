@@ -1,3 +1,4 @@
+// client side rendering
 // import type { NextPage } from 'next'
 import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import rough from "roughjs/bundled/rough.cjs.js";
@@ -21,7 +22,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
 // TODO: allow markers to be placed - different tool
 // LATER: make responsive
 // LATER: allow adding plan, with scale etc
-
+        let clientSide = false;
   
         // TODO: tool object: polyline, rectangle, point
         // TODO: allow for smaller selection etc -> use vs full screen size
@@ -34,7 +35,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
       // function DrawingApp() {
         const generator = rough.generator();
         const lineConfig = { bowing: 0, roughness: 0, stroke: 'blue'}
-        const gridLineConfig = { bowing: 0, roughness: 0, stroke: 'grey', strokeWidth: 0.1}
+        const gridLineConfig = { bowing: 0, roughness: 0, stroke: 'black', strokeWidth: 1, scale: 0.005}
+
 
         const hatchedRectConfig = {
           // bowing: 0, roughness: 0, stroke: 'blue', strokeWidth: 0.1,
@@ -56,6 +58,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           const roughElement = generator.polygon(points, lineConfig)
           return { id, type, points, roughElement }
         }
+        // TODO: need to add grid lines for cells into rectangles
         const createElement = (id, x1, y1, x2, y2, type) => {
           switch (type) {
             case "line":
@@ -205,8 +208,33 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           return [history[index], setState, undo, redo];
         };
         
-        
-        const drawElement = (roughCanvas, context, element) => {
+        const findClosestGridPoint = (x1, y1, xDivisions, yDivisions, currentElx1, currentEly1,correctedX2, correctedY2) => {
+          let shortestDistanceX = null
+          let shortestDistanceY = null
+          let closestPoint = [null, null]
+          let stepX = Math.round((correctedX2 - currentElx1) / xDivisions)
+          let stepY = Math.round((correctedY2 - currentEly1) / yDivisions)
+
+          for (let i = 0; i<=xDivisions; i++) { 
+            let currentX = currentElx1 + i * stepX
+            let currentDistanceX = Math.abs(currentX - x1)
+            if (shortestDistanceX === null || currentDistanceX < shortestDistanceX) {
+              shortestDistanceX = currentDistanceX
+              closestPoint[0] = currentX
+            }
+          }
+          for (let i = 0; i<=yDivisions; i++) { 
+            let currentY = currentEly1 + i * stepY
+            let currentDistanceY = Math.abs(currentY - y1)
+            if (shortestDistanceY === null || currentDistanceY < shortestDistanceY) {
+              shortestDistanceY = currentDistanceY
+              closestPoint[1] = currentY
+            }
+          } 
+          return closestPoint
+        }
+
+        const drawElement = (roughCanvas, context, element, scale) => {
           switch (element.type) {
             case "line":
               // TODO: find where made roughElement
@@ -219,7 +247,44 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             //     roughCanvas.line(point1.x, point1.y, point2.x, point2.y);
             //   }              
             case "rectangle":
+              // TODO: draw gridlines
+              console.log("rectangle", element)
+              if (clientSide && scale != 'null') {
+                let cellSize = 0.1;
+                // delta x
+                let deltaX = element.x2 - element.x1;
+                let deltaY = element.y2 - element.y1;
+                // scale = pixel/metre
+                // use scale -> divide into 0.1m increments
+                let xDivisions = Math.round((scale * deltaX) / cellSize);
+                let yDivisions = Math.round((scale * deltaY) / cellSize);
+                console.log("xDivisions", xDivisions)
+                console.log("yDivisions", yDivisions)
+                // should change size of rectangle to fit gridlines
+                let correctedDeltaX = xDivisions * cellSize / scale;
+                let correctedDeltaY = yDivisions * cellSize / scale;
+                // change x2 and y2 accordingly
+                // TODO: change state accordingly!!
+                let correctedX2 = element.x1 + correctedDeltaX;
+                let correctedY2 = element.y1 + correctedDeltaY;
+                element.roughElement.x2 = correctedX2;
+                element.roughElement.y2 = correctedY2;
+                roughCanvas.draw(element.roughElement)
+
+                // // draw gridlines before rectangle - allow toggle on/off
+                // // draw vertical lines
+                // for (let i = 0; i < xDivisions; i++) {
+                //   let x = element.x1 + (i * cellSize / scale);
+                //   let y1 = element.y1;
+                //   let y2 = element.y2;
+                //   // thin lines, make grey etc
+                //   roughCanvas.line(x, y1, x, y2, gridLineConfig);
+                // }
+
+
+              } else{
               roughCanvas.draw(element.roughElement);
+            }
               break;
             case "pencil":
               // add point to total points
@@ -267,6 +332,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           const [selectedElement, setSelectedElement] = useState(null);
 
           const windowSize = useWindowSize()
+
+          
         
           useLayoutEffect(() => {
             console.log("elements: ", elements)
@@ -282,7 +349,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             elements.forEach(element => {
               // if (action === "writing" && selectedElement.id === element.id) return;
               console.log("uselayout element: ", element)
-              drawElement(roughCanvas, context, element);
+              drawElement(roughCanvas, context, element, scale);
             });
             // loop through polyPoints and draw line between each point
             // TODO: bring polyline into useHistory
@@ -397,12 +464,52 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             } else {
               {/* add points to pencil on mousedown */}
               if (tool === "pencil" & action === "drawing") {
+                // TODO: if within mesh rectangle; snap points to cell
                 const index = elements.length - 1;
                 // need to change element below
-                const { x1, y1 } = elements[index];
-                updateElement(index, x1, y1, clientX, clientY, tool);
+                let { x1, y1 } = elements[index];
+                // check what mesh rectange within
+                console.log("x1, y1: ",x1, y1)
+                for (let i = 0; i < elements.length; i++) {
+                  let currentEl = elements[i]
+                  if (currentEl.type === "rectangle") {
+                    // check if within rectangle
+                    if (clientSide && scale != 'null') { 
+
+                      let elMaxX = Math.max(currentEl.x1, currentEl.x2)
+                      let elMinX = Math.min(currentEl.x1, currentEl.x2)
+                      let elMinY = Math.min(currentEl.y1, currentEl.y2)
+                      let elMaxY = Math.max(currentEl.y1, currentEl.y2)
+                      // should be wiggle if not within any rectangle
+                      if ((x1 > elMinX && x1 < elMaxX && y1 > elMinY && y1 < elMaxY) || (
+                        clientX > elMinX && clientX < elMaxX && clientY > elMinY && clientY < elMaxY
+                      )) {
+                        // snap to grid
+                        // rect should be snapped to grid already
+                        console.log("within mesh")
+                        let cellSize = 0.1;
+                        // delta x
+                        let deltaX = currentEl.x2 - currentEl.x1;
+                        let deltaY = currentEl.y2 - currentEl.y1;                       
+                        let xDivisions = Math.round((scale * deltaX) / cellSize);
+                        let yDivisions = Math.round((scale * deltaY) / cellSize);
+                        // place on closest division
+                        let correctedDeltaX = xDivisions * cellSize / scale;
+                        let correctedDeltaY = yDivisions * cellSize / scale;
+                        let correctedX2 = currentEl.x1 + correctedDeltaX;
+                        let correctedY2 = currentEl.y1 + correctedDeltaY;
+                        [x1, y1] = findClosestGridPoint(x1, y1, xDivisions, yDivisions, currentEl.x1, currentEl.y1,correctedX2, correctedY2);                       
+
+                        updateElement(index, x1, y1, clientX, clientY, tool);
+                      }
+
+                    }
+                  }
+                }
+                // update x and y to be on gridline
               } else {
               const id = elements.length;
+              // TODO: if mesh rectangle -> snap x2 and y2 to grid
               const element = createElement(id, clientX, clientY, clientX, clientY, tool);
               setElements(prevState => [...prevState, element]);
               setSelectedElement(element);
@@ -509,6 +616,7 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
         // const scale =
         // if scaleLength is not null, and scalePoints is not null, then scale = scaleLength/Math.abs(scalePoints[0]-scalePoints[1]) 
         const scale = (inputData.scaleLength && scalePoints) ? inputData.scaleLength/Math.abs(scalePoints[0]-scalePoints[1]) : null
+        clientSide = scale ? true : false;
         console.log("scale: ", scale)
                 // const canvasWidth = 4*500
         const buttonContainerStyle = "absolute z-40"
