@@ -5,6 +5,7 @@ import Image from 'next/image'
 import planImage from '../public/example_plan.jpeg'
 import getStroke from "perfect-freehand";
 import useWindowSize from "../hooks/UseWindowsize"
+import {CSVLink, CSVDownload} from 'react-csv';
 
 let uri = '../public/plans/SSW-DLG-RS1-06-DR-A-6804%20-%20SIXTH%20FLOOR%20FIRE%20STRATEGY.jpg'
 // let encoded = encodeURIComponent(uri);
@@ -33,7 +34,22 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
       // function DrawingApp() {
         const generator = rough.generator();
         const lineConfig = { bowing: 0, roughness: 0, stroke: 'blue'}
+        const gridLineConfig = { bowing: 0, roughness: 0, stroke: 'grey', strokeWidth: 0.1}
 
+        const hatchedRectConfig = {
+          // bowing: 0, roughness: 0, stroke: 'blue', strokeWidth: 0.1,
+          bowing: 0, roughness: 0,
+          fill: 'red',
+          hachureAngle: 90, // angle of hachure,
+          hachureGap: 8,
+          fillStyle: 'cross-hatch',
+          // // fill: "rgb(10,150,10)",
+          // // fill: 'red',
+          // fillStyle: 'hachure',
+          // hachureAngle: 90, // angle of hachure,
+          // hachureGap: 2,
+          // fillWeight: 3
+        }
         // TODO: how to allow for polyline?
         // add multi points to state?
         const createPolyElement = (id, points, type) => { 
@@ -243,11 +259,19 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           const [tool, setTool] = useState("line");
           const [polyPoints, setPolyPoints] = useState([]);
           const [polygons, setPolygons] = useState([]);
+          const [inputData, setInputData] = useState({
+            scaleLength: null
+          })
+          const [scalePoints, setScalePoints] = useState(null)
+
           const [selectedElement, setSelectedElement] = useState(null);
 
           const windowSize = useWindowSize()
         
           useLayoutEffect(() => {
+            console.log("elements: ", elements)
+            console.log("polyPoints: ", polyPoints)
+            console.log("polygons: ", polygons)
             const canvas = document.getElementById("canvas");
             const context = canvas.getContext("2d");
             context.clearRect(0, 0, canvas.width, canvas.height);
@@ -262,13 +286,16 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             });
             // loop through polyPoints and draw line between each point
             // TODO: bring polyline into useHistory
+            // TODO: show line to cursor
             // can sync polygon to elements when complete
+            roughCanvas.line(0, 40, canvas.width, 40, gridLineConfig);
             for (let i = 0; i < polyPoints.length - 1; i++) {
               const point1 = polyPoints[i];
               const point2 = polyPoints[i + 1];
               roughCanvas.line(point1.x, point1.y, point2.x, point2.y, lineConfig);
             }
             polygons.forEach(polygon => {
+              console.log("polygons: ", polygons)
               for (let i = 0; i < polygon.length - 1; i++) {
                 const point1 = polygon[i];
                 const point2 = polygon[i + 1];
@@ -399,6 +426,9 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               // TODO: have temp line from second last point to clientX, clientY
               // TODO: update pencil element on mousedown
               updateElement(index, x1, y1, clientX, clientY, tool);
+              if (tool === "line") { 
+                setScalePoints([x1, clientX])
+              }
             }
 
               // // extra part here
@@ -467,6 +497,19 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             setSelectedElement(null);
             updateElement(id, x1, y1, null, null, type, { text: event.target.value });
           };
+
+          const handleInput = (event) => { 
+            setInputData(prev => ({
+              ...prev,
+              [event.target.name] : event.target.value
+            })
+              )          
+          }
+
+        // const scale =
+        // if scaleLength is not null, and scalePoints is not null, then scale = scaleLength/Math.abs(scalePoints[0]-scalePoints[1]) 
+        const scale = (inputData.scaleLength && scalePoints) ? inputData.scaleLength/Math.abs(scalePoints[0]-scalePoints[1]) : null
+        console.log("scale: ", scale)
                 // const canvasWidth = 4*500
         const buttonContainerStyle = "absolute z-40"
         const buttonStyle = "text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 mr-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800" 
@@ -507,6 +550,25 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
             </div>            
           </>
         )
+        const scaleInput = (
+          <>  
+            <div style={{ position: "fixed", bottom: 0, padding: 10 }}>
+              <label>{`Line Length: `}
+                <input
+                  type="text" 
+                  name='scaleLength'
+                  value={inputData.scaleLength}
+                  onChange={handleInput}
+                />
+              </label>
+            </div>
+          </>
+        )
+        const downloadCSVButton = (
+          <>
+            <CSVLink data={elements ? elements: null} >Download CSV</CSVLink>
+          </>
+        )
   return (
     
       // return (
@@ -514,6 +576,8 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
           <div className={buttonContainerStyle}>
 
             {topButtons}
+            {scaleInput}
+            {scale ? downloadCSVButton: null }
           </div>
           <div>
             <canvas
@@ -545,7 +609,6 @@ import fullPlanImage from '../public/plans/TD02H.jpg'
               />
               </div>
             </div>
-            {/* {bottomButtons} */}
         </>
       );
     }
